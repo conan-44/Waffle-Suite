@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Waffle Suite</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <nav id="topnav">
+        <a href="#" class="nav-brand">
+            <i class="fa-solid fa-stroopwafel"></i>
+            <span class="brand-font">waffle suite</span>
+        </a>
+
+        <ul class="nav-links">
+            <li><button class="navbut active"><i class="fa-solid fa-house"></i> Home</button></li>
+            <li><button class="navbut" onclick="scrollToFeatures()"><i class="fa-solid fa-layer-group"></i> Features</button></li>
+            <li><button class="navbut" onclick="openModal('Security & Privacy', 'Zero key telemetry, instant encryption keys, built on SkvBase.')"><i class="fa-solid fa-shield-halved"></i> Security</button></li>
+            <li><button class="navbut" onclick="openModal('Documentation', 'Detailed API docs and deployment guides.')"><i class="fa-solid fa-book-open"></i> Docs</button></li>
+            <li><a href="https://github.com" target="_blank" class="navbut"><i class="fa-brands fa-github"></i> GitHub</a></li>
+        </ul>
+
+        <div class="nav-actions">
+            <button class="btn-launch" onclick="window.location.href='chat.html'">
+                Launch App
+            </button>
+            <button class="mobile-menu-btn" onclick="openModal('Menu', 'Mobile menu clicked.')">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+        </div>
+    </nav>
+
+    <div class="top" id="topdiv">
+        <div class="badge-pill">
+            <i class="fa-solid fa-bolt"></i> Powered by SkvBase
+        </div>
+        <h1>waffle suite</h1>
+        <p class="subhead">Simple, private, and frictionless communication built for small groups and friends.</p>
+    </div>
+
+    <section class="hero-section">
+        <p class="midline">The premier <span>open-source</span> chatting platform without email.</p>
+
+        <div class="cta-group">
+            <button class="cta cta-primary" onclick="openModal('Download Waffle Suite', 'Choose client download: Windows, macOS, Linux, or Android.')">
+                <i class="fa-solid fa-download"></i> Download Now
+            </button>
+            <button class="cta" onclick="openModal('Instant Online Session', 'Creating anonymous guest keypair via SkvBase...')">
+                <i class="fa-solid fa-globe"></i> Start Online
+            </button>
+        </div>
+    </section>
+
+    <section class="features-wrapper" id="features">
+        <div class="features-header">
+            <h2 class="features-title">Everything you need</h2>
+            <p class="features-subtitle">A minimal, private chat space designed around speed and simplicity.</p>
+        </div>
+        
+        <div class="scroll-container">
+            <div class="scroll-track" id="scrollTrack"></div>
+        </div>
+    </section>
+
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal-box">
+            <h2 id="modalTitle">Notice</h2>
+            <p id="modalBody">Description goes here.</p>
+            <button class="close-btn" onclick="closeModal()">Got it</button>
+        </div>
+    </div>
+
+    <script>
+        const featuresData = [
+            {
+                icon: 'fa-user-check',
+                title: 'No Email Required',
+                desc: 'Get chatting instantly with generated passkeys. No personal info or logins required.',
+                badge: 'Privacy'
+            },
+            {
+                icon: 'fa-lock',
+                title: 'End-to-End Privacy',
+                desc: 'Your conversations are encrypted client-side so only you and your friends can read them.',
+                badge: 'Security'
+            },
+            {
+                icon: 'fa-comments',
+                title: 'Instant Channels',
+                desc: 'Create temporary rooms or permanent group spaces in a single click.',
+                badge: 'Chat'
+            },
+            {
+                icon: 'fa-feather',
+                title: 'Lightweight & Fast',
+                desc: 'Ultra-low resource usage with crisp, instant message delivery everywhere.',
+                badge: 'Speed'
+            },
+            {
+                icon: 'fa-palette',
+                title: 'Custom Themes',
+                desc: 'Match your aesthetic with built-in dark modes, accent tokens, and light themes.',
+                badge: 'Style'
+            },
+            {
+                icon: 'fa-database',
+                title: 'Supabase Integration',
+                desc: 'High-speed distributed key-value storage keeps real-time sync instant and dependable.',
+                badge: 'Backend'
+            }
+        ];
+
+        function initFeatureTrack() {
+            const track = document.getElementById('scrollTrack');
+            const fullList = [...featuresData, ...featuresData];
+
+            track.innerHTML = fullList.map(item => `
+                <div class="card">
+                    <div class="card-icon">
+                        <i class="fa-solid ${item.icon}"></i>
+                    </div>
+                    <span class="card-badge">${item.badge}</span>
+                    <h3>${item.title}</h3>
+                    <p>${item.desc}</p>
+                </div>
+            `).join('');
+        }
+
+        function scrollToFeatures() {
+            document.getElementById('features').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function openModal(title, body) {
+            document.getElementById('modalTitle').innerText = title;
+            document.getElementById('modalBody').innerText = body;
+            document.getElementById('modalOverlay').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('modalOverlay').classList.remove('active');
+        }
+
+        window.onload = function() {
+            initFeatureTrack();
+        };
+    </script>
+</body>
+</html>

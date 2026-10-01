@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Waffle Suite - Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: { 50: 'var(--color-surface-warm)', 100: 'var(--color-accent-pale)', 500: 'var(--color-accent-light)', 600: 'var(--color-accent)', 700: 'var(--color-accent-dark)', 800: 'var(--color-accent-deep)' }
+                    },
+                    fontFamily: { sans: ['Inter', 'sans-serif'], heading: ['Poppins', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+        ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 9999px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
+        .chat-shadow { box-shadow: var(--shadow-chat); }
+        .floating-dm-card { transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease, box-shadow 0.2s ease; }
+        .typing-dot { animation: typingAnimation 1.4s infinite ease-in-out; }
+        .typing-dot:nth-child(1) { animation-delay: 0s; }
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typingAnimation { 0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }
+    </style>
+</head>
+<body class="chat-page bg-zinc-100 text-zinc-800 font-sans h-screen flex flex-col overflow-hidden antialiased">
+    <nav id="topnav">
+        <a href="#" class="nav-brand">
+            <i class="fa-solid fa-stroopwafel"></i>
+            <span class="brand-font">waffle suite</span>
+        </a>
+
+        <ul class="nav-links">
+            <li><button class="navbut active"><i class="fa-solid fa-house"></i> Home</button></li>
+            <li><button class="navbut" onclick="scrollToFeatures()"><i class="fa-solid fa-layer-group"></i> Features</button></li>
+            <li><button class="navbut" onclick="openModal('Security & Privacy', 'Zero key telemetry, instant encryption keys, built on SkvBase.')"><i class="fa-solid fa-shield-halved"></i> Security</button></li>
+            <li><button class="navbut" onclick="openModal('Documentation', 'Detailed API docs and deployment guides.')"><i class="fa-solid fa-book-open"></i> Docs</button></li>
+            <li><a href="https://github.com" target="_blank" class="navbut"><i class="fa-brands fa-github"></i> GitHub</a></li>
+        </ul>
+
+        <div class="nav-actions">
+            <button class="btn-launch" onclick="openModal('Waffle Web App', 'Connecting to SkvBase anonymous node...')">
+                Launch App
+            </button>
+            <button class="mobile-menu-btn" onclick="openModal('Menu', 'Mobile menu clicked.')">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+        </div>
+    </nav>
+    <header id="chatHeader" class="h-14 bg-white border-b border-zinc-200 px-4 flex items-center justify-between shrink-0 z-30">
+        <div class="flex items-center gap-3">
+            <button id="mobileMenuBtn" class="md:hidden text-zinc-600 hover:text-zinc-900 p-1.5 rounded-lg hover:bg-zinc-100 transition-colors">
+                <i class="fa-solid fa-bars text-lg"></i>
+            </button>
+            <span class="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-red-50 text-red-600 border border-red-200">
+                <i class="fa-solid fa-circle text-[6px] text-red-500 animate-pulse"></i> Live Network
+            </span>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <div class="relative hidden sm:block w-64">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 text-xs"></i>
+                <input type="text" placeholder="Search chats, channels..." class="w-full bg-zinc-100 border border-zinc-200 rounded-full pl-8 pr-4 py-1.5 text-xs text-zinc-700 focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:bg-white transition-all">
+            </div>
+
+            <button onclick="toggleFriendsListModal()" class="relative p-2 text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors" title="Friends & Active DMs">
+                <i class="fa-solid fa-user-group text-base"></i>
+                <span class="absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-500 rounded-full ring-2 ring-white"></span>
+            </button>
+            
+            <button onclick="showToast('Notifications enabled')" class="p-2 text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors" title="Notifications">
+                <i class="fa-solid fa-bell text-base"></i>
+            </button>
+
+            <div class="flex items-center gap-2 pl-2 border-l border-zinc-200">
+                <span class="hidden sm:inline text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Callsign</span>
+                <input id="callsignInput" type="text" maxlength="24" autocomplete="off" aria-label="Anonymous callsign" class="w-28 sm:w-36 bg-zinc-100 border border-zinc-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-zinc-800 focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20" placeholder="Anonymous">
+            </div>
+        </div>
+    </header>
+
+    <div class="flex-1 flex overflow-hidden relative">
+
+        <aside id="serverRail" class="w-16 bg-zinc-900 flex flex-col items-center py-3 gap-3 shrink-0 z-20 transition-all duration-300">
+            <button onclick="selectServer('home')" class="server-btn relative group p-0.5" data-server="home">
+                <div id="indicator-home" class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-white rounded-r-full transition-all duration-200 opacity-100"></div>
+                <div class="w-11 h-11 rounded-2xl bg-red-600 text-white flex items-center justify-center font-bold shadow-md group-hover:rounded-xl transition-all">
+                    <i class="fa-solid fa-house text-base"></i>
+                </div>
+                <span class="absolute left-16 bg-zinc-900 text-white text-xs font-medium px-2.5 py-1 rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-md">
+                    Waffle HQ
+                </span>
+            </button>
+
+            <div class="w-8 h-[1px] bg-zinc-800 my-1"></div>
+
+            <div id="serverList" class="flex flex-col gap-3 w-full items-center flex-1 overflow-y-auto no-scrollbar"></div>
+
+            <button onclick="openCreateServerModal()" class="w-11 h-11 rounded-2xl bg-zinc-800 hover:bg-emerald-600 text-emerald-400 hover:text-white flex items-center justify-center transition-all group relative">
+                <i class="fa-solid fa-plus text-base"></i>
+                <span class="absolute left-16 bg-zinc-900 text-white text-xs font-medium px-2.5 py-1 rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-md">
+                    Create Server
+                </span>
+            </button>
+        </aside>
+
+        <aside id="channelSidebar" class="w-60 bg-zinc-50 border-r border-zinc-200 flex flex-col shrink-0 z-10 transition-all duration-300 absolute md:relative inset-y-0 left-16 md:left-0 -translate-x-full md:translate-x-0 shadow-lg md:shadow-none">
+            <div class="h-14 px-4 border-b border-zinc-200 flex items-center justify-between font-heading font-semibold text-zinc-900 bg-white">
+                <span id="currentServerTitle" class="truncate text-sm font-bold">Waffle Friends</span>
+                <button onclick="openServerSettingsModal()" class="text-zinc-400 hover:text-zinc-700 p-1 rounded">
+                    <i class="fa-solid fa-chevron-down text-xs"></i>
+                </button>
+            </div>
+
+            <div class="px-3 pt-3 pb-2 flex gap-1 border-b border-zinc-200/80 bg-zinc-100/50">
+                <button id="tabChannelsBtn" onclick="switchSidebarTab('channels')" class="flex-1 py-1.5 px-2 text-xs font-semibold rounded-lg bg-white text-zinc-900 shadow-sm transition-all flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-hashtag text-red-500"></i> Channels
+                </button>
+                <button id="tabFriendsBtn" onclick="switchSidebarTab('friends')" class="flex-1 py-1.5 px-2 text-xs font-semibold rounded-lg text-zinc-500 hover:text-zinc-800 transition-all flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-user-group"></i> Direct Messages
+                </button>
+            </div>
+
+            <div id="channelsView" class="flex-1 overflow-y-auto px-2 py-3 space-y-4">
+                <div>
+                    <div class="flex items-center justify-between px-2.5 mb-1.5 text-[11px] font-bold tracking-wider text-zinc-400 uppercase">
+                        <span>Text Channels</span>
+                        <button onclick="openCreateChannelModal()" class="hover:text-zinc-700" title="Create Channel"><i class="fa-solid fa-plus"></i></button>
+                    </div>
+                    <div id="textChannelsList" class="space-y-0.5"></div>
+                </div>
+
+                <div>
+                    <div class="flex items-center justify-between px-2.5 mb-1.5 text-[11px] font-bold tracking-wider text-zinc-400 uppercase">
+                        <span>Voice Lounges</span>
+                        <button onclick="showToast('Voice lounges enabled')" class="hover:text-zinc-700" title="Add Voice Lounge"><i class="fa-solid fa-plus"></i></button>
+                    </div>
+                    <div class="space-y-0.5">
+                        <button onclick="joinVoiceChannel('General Voice')" class="w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium text-zinc-600 hover:bg-zinc-200/60 transition-colors group">
+                            <div class="flex items-center gap-2 truncate">
+                                <i class="fa-solid fa-volume-high text-zinc-400 group-hover:text-zinc-600"></i>
+                                <span class="truncate">General Voice</span>
+                            </div>
+                            <span class="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-semibold">2</span>
+                        </button>
+                        <button onclick="joinVoiceChannel('Chill Music Lounge')" class="w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium text-zinc-600 hover:bg-zinc-200/60 transition-colors group">
+                            <div class="flex items-center gap-2 truncate">
+                                <i class="fa-solid fa-music text-zinc-400 group-hover:text-zinc-600"></i>
+                                <span class="truncate">Music Lounge</span>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="friendsView" class="flex-1 overflow-y-auto px-2 py-3 hidden space-y-1">
+                <div class="px-2.5 mb-2 text-[11px] font-bold tracking-wider text-zinc-400 uppercase">Direct Messages</div>
+                <form onsubmit="addContactByCallsign(event)" class="px-2 mb-3 flex gap-1.5">
+                    <input id="contactCallsignInput" type="text" maxlength="24" autocomplete="off" placeholder="Enter callsign" aria-label="Callsign to add" class="min-w-0 flex-1 bg-white border border-zinc-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20">
+                    <button type="submit" class="px-2.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold" title="Add direct message contact"><i class="fa-solid fa-plus"></i></button>
+                </form>
+                <div id="friendsListSidebar" class="space-y-1"></div>
+            </div>
+
+            <div id="voiceTray" class="p-3 bg-emerald-950 text-emerald-100 border-t border-emerald-800 hidden flex-col gap-2">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2 text-xs font-semibold text-emerald-300">
+                        <span class="relative flex h-2 w-2">
+                          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                        </span>
+                        <span id="voiceChannelName">General Voice</span>
+                    </div>
+                    <button onclick="disconnectVoice()" class="text-red-400 hover:text-red-300 text-xs px-2 py-0.5 bg-red-950/60 rounded border border-red-800 font-medium">
+                        Disconnect
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <main class="flex-1 flex flex-col bg-white min-w-0 z-0">
+            <div class="h-14 border-b border-zinc-200 px-4 flex items-center justify-between shrink-0 bg-white">
+                <div class="flex items-center gap-2 min-w-0">
+                    <span class="text-zinc-400 font-bold text-lg">#</span>
+                    <h2 id="activeChannelName" class="font-heading font-bold text-zinc-900 truncate text-sm sm:text-base">general</h2>
+                    <span class="hidden lg:inline-block text-zinc-300 mx-1">|</span>
+                    <p id="activeChannelTopic" class="hidden lg:inline-block text-xs text-zinc-500 truncate max-w-xs">
+                        Welcome to Waffle Suite! Simple, clear chat for teams and friends.
+                    </p>
+                </div>
+
+                <div class="flex items-center gap-1.5 shrink-0">
+                    <button onclick="toggleMemberList()" class="p-2 text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100 rounded-lg text-sm" title="Member List">
+                        <i class="fa-solid fa-users"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div id="messageFeed" class="flex-1 overflow-y-auto p-4 space-y-4 bg-zinc-50/40">
+                <div class="my-4 p-4 rounded-xl bg-zinc-100 border border-zinc-200 flex items-start gap-3.5">
+                    <div class="w-10 h-10 rounded-xl bg-red-600 text-white flex items-center justify-center font-bold text-lg shrink-0 shadow-sm">
+                        <i class="fa-solid fa-hashtag"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-heading font-semibold text-zinc-900 text-sm">Welcome to #<span id="welcomeChannelName">general</span></h3>
+                        <p class="text-xs text-zinc-600 mt-1 leading-relaxed">This is the start of the channel. Open direct messages on the right side stack or send messages below.</p>
+                    </div>
+                </div>
+
+                <div id="messagesList" class="space-y-3.5"></div>
+            </div>
+
+            <div id="typingIndicator" class="px-4 py-1 h-5 text-[11px] text-zinc-400 italic flex items-center gap-1"></div>
+
+            <div class="p-3 bg-white border-t border-zinc-200">
+                <form id="chatForm" onsubmit="handleRealtimeSend(event)" class="relative flex flex-col bg-zinc-100 border border-zinc-200 rounded-xl focus-within:border-red-500 focus-within:ring-2 focus-within:ring-red-500/20 transition-all">
+                    <textarea id="chatInput" rows="1" placeholder="Message #general... (Press Enter to send)" class="w-full bg-transparent px-4 py-3 text-xs sm:text-sm text-zinc-800 focus:outline-none resize-none max-h-32"></textarea>
+                    
+                    <div class="flex items-center justify-between px-3 py-2 border-t border-zinc-200/70">
+                        <div class="flex items-center gap-1">
+                            <button type="button" onclick="showToast('Attachment dialog')" class="p-1.5 text-zinc-500 hover:text-zinc-800 hover:bg-zinc-200/60 rounded-lg text-xs" title="Attach file"><i class="fa-solid fa-paperclip"></i></button>
+                            <button type="button" onclick="showToast('Code block added')" class="p-1.5 text-zinc-500 hover:text-zinc-800 hover:bg-zinc-200/60 rounded-lg text-xs" title="Code snippet"><i class="fa-solid fa-code"></i></button>
+                            <button type="button" onclick="showToast('Formatting bar')" class="p-1.5 text-zinc-500 hover:text-zinc-800 hover:bg-zinc-200/60 rounded-lg text-xs" title="Bold text"><i class="fa-solid fa-bold"></i></button>
+                        </div>
+                        
+                        <button type="submit" class="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold shadow-sm flex items-center gap-1.5 transition-all">
+                            <span>Send</span>
+                            <i class="fa-solid fa-paper-plane text-[10px]"></i>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </main>
+
+        <aside id="memberSidebar" class="w-56 bg-zinc-50 border-l border-zinc-200 p-3 hidden lg:block overflow-y-auto shrink-0">
+            <div class="text-[11px] font-bold tracking-wider text-zinc-400 uppercase mb-2 px-1">Online — 3</div>
+            <div id="onlineMembersList" class="space-y-1"></div>
+        </aside>
+
+    </div>
+
+    <div class="fixed bottom-4 right-4 z-40 flex flex-col-reverse items-end gap-2.5 pointer-events-none max-h-[calc(100vh-80px)] overflow-y-auto pr-1">
+        
+        <div class="pointer-events-auto">
+            <button onclick="toggleFriendsListModal()" class="flex items-center gap-2.5 px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl shadow-xl border border-zinc-700 transition-all hover:scale-105 active:scale-95">
+                <div class="relative">
+                    <i class="fa-solid fa-comments text-red-500 text-sm"></i>
+                    <span id="unreadDMBadge" class="absolute -top-1 -right-1.5 w-2 h-2 bg-red-500 rounded-full hidden"></span>
+                </div>
+                <span class="text-xs font-semibold tracking-wide">Direct Messages</span>
+                <span id="dmCountBadge" class="bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-md">2</span>
+            </button>
+        </div>
+
+        <div id="floatingDMStack" class="flex flex-col-reverse items-end gap-2.5 pointer-events-auto w-full"></div>
+
+    </div>
+
+    <div id="friendsModal" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center hidden opacity-0 transition-opacity">
+        <div class="bg-white rounded-2xl w-full max-w-md p-5 shadow-2xl border border-zinc-200 m-4 transform scale-95 transition-transform">
+            <div class="flex items-center justify-between pb-3 border-b border-zinc-200">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-lg bg-red-100 text-red-600 flex items-center justify-center font-bold">
+                        <i class="fa-solid fa-users text-sm"></i>
+                    </div>
+                    <h3 class="font-heading font-bold text-zinc-900 text-sm">Friends & Active DMs</h3>
+                </div>
+                <button onclick="toggleFriendsListModal()" class="text-zinc-400 hover:text-zinc-700 p-1">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <p class="text-xs text-zinc-500 my-3">Select a friend below to pop open a floating direct message stack on the bottom right.</p>
+
+            <div class="space-y-2 max-h-80 overflow-y-auto pr-1" id="friendsModalList"></div>
+
+            <div class="mt-4 pt-3 border-t border-zinc-200 flex justify-end">
+                <button onclick="toggleFriendsListModal()" class="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-xs font-semibold rounded-xl">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="createChannelModal" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+        <div class="bg-white rounded-2xl w-full max-w-sm p-5 shadow-2xl border border-zinc-200 m-4">
+            <h3 class="font-heading font-bold text-zinc-900 text-sm mb-1">Create Channel</h3>
+            <p class="text-xs text-zinc-500 mb-4">Channels are where your group communicates.</p>
+            
+            <form onsubmit="handleCreateChannel(event)">
+                <div class="mb-4">
+                    <label class="block text-xs font-semibold text-zinc-700 mb-1">Channel Name</label>
+                    <div class="relative">
+                        <span class="absolute left-3 top-2.5 text-zinc-400 font-bold text-xs">#</span>
+                        <input id="newChannelInput" type="text" placeholder="project-waffle" required class="w-full bg-zinc-100 border border-zinc-200 rounded-xl pl-8 pr-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-red-500">
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-2">
+                    <button type="button" onclick="closeCreateChannelModal()" class="px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-xs font-semibold rounded-xl">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-xl">
+                        Create
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="toast" class="fixed top-16 right-4 z-50 bg-zinc-900 text-white text-xs px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 transform translate-y-[-100px] opacity-0 transition-all pointer-events-none">
+        <i class="fa-solid fa-circle-info text-red-400"></i>
+        <span id="toastMessage">Action completed</span>
+    </div>
+
+    <script>
+        const state = {
+            currentServer: 'home',
+            currentChannel: 'general',
+            activeTab: 'channels',
+            inVoiceChannel: false,
+            voiceName: '',
+            
+            servers: [
+                { id: 'home', name: 'Waffle HQ', icon: 'fa-house', color: 'bg-red-600' },
+                { id: 'gaming', name: 'Gaming Zone', icon: 'fa-gamepad', color: 'bg-indigo-600' },
+                { id: 'devs', name: 'Dev Den', icon: 'fa-code', color: 'bg-emerald-600' }
+            ],
+
+            channels: {
+                home: [
+                    { id: 'general', name: 'general', topic: 'Main workspace and team discussion' },
+                    { id: 'announcements', name: 'announcements', topic: 'Official product news and updates' },
+                    { id: 'random', name: 'random', topic: 'Off-topic discussions and links' }
+                ],
+                gaming: [
+                    { id: 'squad-up', name: 'squad-finder', topic: 'Find teammates for evening sessions' }
+                ],
+                devs: [
+                    { id: 'frontend', name: 'frontend-hub', topic: 'HTML, CSS, Tailwind and JS chat' }
+                ]
+            },
+
+            messages: {},
+
+            friends: [],
+
+            openDMs: []
+        };
+
+        window.onload = function() {
+            renderServerRail();
+            renderChannels();
+            renderMessages();
+            renderMembers();
+            renderFriendsSidebar();
+            renderFriendsModalList();
+            renderFloatingDMStack();
+
+            document.getElementById('mobileMenuBtn').addEventListener('click', () => {
+                const sidebar = document.getElementById('channelSidebar');
+                sidebar.classList.toggle('-translate-x-full');
+            });
+        };
+
+        function renderServerRail() {
+            const container = document.getElementById('serverList');
+            container.innerHTML = state.servers.map(s => `
+                <button onclick="selectServer('${s.id}')" class="server-btn relative group p-0.5" data-server="${s.id}">
+                    <div id="indicator-${s.id}" class="absolute left-0 top-1/2 -translate-y-1/2 w-1 bg-white rounded-r-full transition-all duration-200 ${state.currentServer === s.id ? 'opacity-100 h-7' : 'opacity-0 h-2 group-hover:opacity-50'}"></div>
+                    <div class="w-11 h-11 rounded-2xl ${s.color} text-white flex items-center justify-center font-bold shadow-sm group-hover:rounded-xl transition-all">
+                        <i class="fa-solid ${s.icon} text-base"></i>
+                    </div>
+                    <span class="absolute left-16 bg-zinc-900 text-white text-xs font-medium px-2.5 py-1 rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-md">
+                        ${s.name}
+                    </span>
+                </button>
+            `).join('');
+        }
+
+        async function addContactByCallsign(event) {
+            event.preventDefault();
+            const input = document.getElementById('contactCallsignInput');
+            const callsign = input.value.trim().replace(/\s+/g, '_').slice(0, 24);
+            if (!callsign) return;
+            if (callsign === currentCallsign) {
+                showToast('You cannot DM yourself');
+                return;
+            }
+            if (state.friends.some(friend => friend.callsign === callsign)) {
+                showToast('Callsign already added');
+                return;
+            }
+
+            const registeredCallsign = await findCallsign(callsign);
+            if (!registeredCallsign) {
+                showToast('Callsign not found in room members');
+                return;
+            }
+
+            state.friends.push({ id: `contact-${Date.now()}`, callsign: registeredCallsign, status: 'online' });
+            input.value = '';
+            renderFriendsSidebar();
+            renderFriendsModalList();
+            renderMembers();
+            showToast(`${registeredCallsign} added`);
+        }
+
+        function selectServer(serverId) {
+            state.currentServer = serverId;
+            const server = state.servers.find(s => s.id === serverId) || { name: 'Waffle HQ' };
+            document.getElementById('currentServerTitle').innerText = server.name;
+            
+            const serverChans = state.channels[serverId] || [];
+            if (serverChans.length > 0) {
+                state.currentChannel = serverChans[0].id;
+            }
+
+            renderServerRail();
+            renderChannels();
+            renderMessages();
+            showToast(`Switched to ${server.name}`);
+        }
+
+        function renderChannels() {
+            const container = document.getElementById('textChannelsList');
+            const currentChans = state.channels[state.currentServer] || [];
+
+            container.innerHTML = currentChans.map(c => `
+                <button onclick="selectChannel('${c.id}')" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium ${state.currentChannel === c.id ? 'bg-red-50 text-red-600 font-semibold' : 'text-zinc-600 hover:bg-zinc-200/60'} transition-colors group">
+                    <div class="flex items-center gap-2 truncate">
+                        <span class="text-zinc-400 group-hover:text-zinc-600 font-bold">#</span>
+                        <span class="truncate">${c.name}</span>
+                    </div>
+                </button>
+            `).join('');
+
+            const activeChanObj = currentChans.find(c => c.id === state.currentChannel) || { name: state.currentChannel, topic: 'Channel discussion' };
+            document.getElementById('activeChannelName').innerText = activeChanObj.name;
+            document.getElementById('welcomeChannelName').innerText = activeChanObj.name;
+            document.getElementById('activeChannelTopic').innerText = activeChanObj.topic;
+            document.getElementById('chatInput').placeholder = `Message #${activeChanObj.name}...`;
+        }
+
+        function selectChannel(chanId) {
+            state.currentChannel = chanId;
+            renderChannels();
+            renderMessages();
+        }
+
+        function switchSidebarTab(tab) {
+            state.activeTab = tab;
+            const chanBtn = document.getElementById('tabChannelsBtn');
+            const friBtn = document.getElementById('tabFriendsBtn');
+            const chanView = document.getElementById('channelsView');
+            const friView = document.getElementById('friendsView');
+
+            if (tab === 'channels') {
+                chanBtn.className = 'flex-1 py-1.5 px-2 text-xs font-semibold rounded-lg bg-white text-zinc-900 shadow-sm transition-all flex items-center justify-center gap-1.5';
+                friBtn.className = 'flex-1 py-1.5 px-2 text-xs font-semibold rounded-lg text-zinc-500 hover:text-zinc-800 transition-all flex items-center justify-center gap-1.5';
+                chanView.classList.remove('hidden');
+                friView.classList.add('hidden');
+            } else {
+                friBtn.className = 'flex-1 py-1.5 px-2 text-xs font-semibold rounded-lg bg-white text-zinc-900 shadow-sm transition-all flex items-center justify-center gap-1.5';
+                chanBtn.className = 'flex-1 py-1.5 px-2 text-xs font-semibold rounded-lg text-zinc-500 hover:text-zinc-800 transition-all flex items-center justify-center gap-1.5';
+                friView.classList.remove('hidden');
+                chanView.classList.add('hidden');
+            }
+        }
+
+        function renderMessages() {
+            const container = document.getElementById('messagesList');
+            const msgs = state.messages[state.currentChannel] || [];
+
+            if (msgs.length === 0) {
+                container.innerHTML = `<div class="text-center py-8 text-zinc-400 text-xs">No messages in this channel yet.</div>`;
+                return;
+            }
+
+            container.innerHTML = msgs.map(m => `
+                <div class="flex items-start gap-3 group hover:bg-zinc-100/60 p-1.5 rounded-xl transition-colors">
+                    <div class="w-8 h-8 rounded-full bg-red-100 text-red-600 flex items-center justify-center shrink-0 mt-0.5 shadow-sm text-xs font-semibold">${m.sender.slice(0, 2).toUpperCase()}</div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                            <span class="font-semibold text-xs text-zinc-900">${m.sender}</span>
+                            ${(m.badges || []).map(b => `<span class="bg-red-100 text-red-600 text-[10px] font-bold px-1.5 py-0.2 rounded">${b}</span>`).join('')}
+                            <span class="text-[10px] text-zinc-400">${m.time}</span>
+                        </div>
+                        <div class="text-xs text-zinc-700 leading-relaxed mt-0.5 break-words">${m.content}</div>
+                    </div>
+                </div>
+            `).join('');
+
+            const feed = document.getElementById('messageFeed');
+            feed.scrollTop = feed.scrollHeight;
+        }
+
+        function handleSendMessage(e) {
+            e.preventDefault();
+            const input = document.getElementById('chatInput');
+            const text = input.value.trim();
+            if (!text) return;
+
+            if (!state.messages[state.currentChannel]) {
+                state.messages[state.currentChannel] = [];
+            }
+
+            const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            state.messages[state.currentChannel].push({
+                id: Date.now(),
+                sender: currentCallsign,
+                avatar: '',
+                time: now,
+                content: text,
+                badges: []
+            });
+
+            input.value = '';
+            renderMessages();
+        }
+
+        function renderFloatingDMStack() {
+            const container = document.getElementById('floatingDMStack');
+            document.getElementById('dmCountBadge').innerText = state.openDMs.length;
+
+            if (state.openDMs.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+
+            container.innerHTML = state.openDMs.map(dm => {
+                const friend = state.friends.find(f => f.id === dm.friendId) || { callsign: 'Unknown', status: 'online' };
+                
+                if (dm.minimized) {
+                    return `
+                        <div class="floating-dm-card w-72 sm:w-80 bg-zinc-900 text-white rounded-xl shadow-lg border border-zinc-700 flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-zinc-800 transition-all">
+                            <div class="flex items-center gap-2.5 min-w-0 flex-1" onclick="toggleMinimizeDM('${dm.id}')">
+                                <div class="relative shrink-0">
+                                    <div class="w-6 h-6 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-[9px] font-bold">${friend.callsign.slice(0, 2).toUpperCase()}</div>
+                                    <span class="absolute bottom-0 right-0 w-2 h-2 ${friend.status === 'online' ? 'bg-emerald-500' : 'bg-amber-500'} rounded-full ring-1 ring-zinc-900"></span>
+                                </div>
+                                <span class="text-xs font-medium truncate">${friend.callsign}</span>
+                            </div>
+
+                            <div class="flex items-center gap-1 shrink-0">
+                                <button onclick="toggleMinimizeDM('${dm.id}')" class="text-zinc-400 hover:text-white p-1 rounded" title="Expand">
+                                    <i class="fa-solid fa-chevron-up text-xs"></i>
+                                </button>
+                                <button onclick="closeDM('${dm.id}')" class="text-zinc-400 hover:text-red-400 p-1 rounded" title="Close">
+                                    <i class="fa-solid fa-xmark text-xs"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                return `
+                    <div class="floating-dm-card w-72 sm:w-80 h-80 bg-white rounded-xl shadow-2xl border border-zinc-200 flex flex-col chat-shadow overflow-hidden">
+                        <div class="bg-zinc-900 text-white px-3 py-2 flex items-center justify-between shrink-0">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                                <div class="relative shrink-0">
+                                    <div class="w-6 h-6 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-[9px] font-bold">${friend.callsign.slice(0, 2).toUpperCase()}</div>
+                                    <span class="absolute bottom-0 right-0 w-2 h-2 ${friend.status === 'online' ? 'bg-emerald-500' : 'bg-amber-500'} rounded-full ring-1 ring-zinc-900"></span>
+                                </div>
+                                <div class="min-w-0">
+                                    <div class="text-xs font-bold truncate leading-tight">${friend.callsign}</div>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center gap-1 shrink-0">
+                                <button onclick="toggleMinimizeDM('${dm.id}')" class="text-zinc-400 hover:text-white p-1 rounded" title="Minimize">
+                                    <i class="fa-solid fa-minus text-xs"></i>
+                                </button>
+                                <button onclick="closeDM('${dm.id}')" class="text-zinc-400 hover:text-red-400 p-1 rounded" title="Close">
+                                    <i class="fa-solid fa-xmark text-xs"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="dmBody_${dm.id}" class="flex-1 overflow-y-auto p-3 space-y-2 bg-zinc-50/60 text-xs">
+                            ${dm.messages.map(m => `
+                                <div class="flex flex-col ${m.isMe ? 'items-end' : 'items-start'}">
+                                    <div class="max-w-[85%] px-3 py-1.5 rounded-xl ${m.isMe ? 'bg-red-600 text-white rounded-br-none' : 'bg-white border border-zinc-200 text-zinc-800 shadow-sm rounded-bl-none'} break-words">
+                                        ${m.text}
+                                    </div>
+                                    <span class="text-[9px] text-zinc-400 mt-0.5 px-1">${m.time}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+
+                        <form onsubmit="handleSendDM(event, '${dm.id}')" class="p-2 border-t border-zinc-200 bg-white flex items-center gap-1.5">
+                            <input id="dmInput_${dm.id}" type="text" placeholder="Direct message..." class="flex-1 bg-zinc-100 border border-zinc-200 rounded-lg px-3 py-1.5 text-xs text-zinc-800 focus:outline-none focus:ring-1 focus:ring-red-500">
+                            <button type="submit" class="p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs shrink-0 transition-colors">
+                                <i class="fa-solid fa-paper-plane text-xs"></i>
+                            </button>
+                        </form>
+                    </div>
+                `;
+            }).join('');
+
+            state.openDMs.forEach(dm => {
+                if (!dm.minimized) {
+                    const el = document.getElementById(`dmBody_${dm.id}`);
+                    if (el) el.scrollTop = el.scrollHeight;
+                }
+            });
+        }
+
+        async function openFloatingDM(friendId) {
+    let dm = state.openDMs.find(d => d.friendId === friendId);
+    if (dm) {
+        dm.minimized = false;
+    } else {
+        const friend = state.friends.find(f => f.id === friendId);
+        if (!friend) return;
+        const roomId = await startDM(friend.callsign);
+        if (!roomId) return showToast('Unable to start DM');
+        
+        if (state.openDMs.length >= 3) state.openDMs.shift();
+        
+        dm = {
+            id: 'dm_' + friendId + '_' + Date.now(),
+            friendId: friendId,
+            roomId: roomId,
+            minimized: false,
+            messages: []
+        };
+        state.openDMs.push(dm);
+    }
+
+    renderFloatingDMStack();
+    await loadAndSubscribeDM(dm);
+    showToast(`Opened DM with ${state.friends.find(f => f.id === friendId).callsign}`);
+}
+
+        function toggleMinimizeDM(dmId) {
+            const dm = state.openDMs.find(d => d.id === dmId);
+            if (dm) {
+                dm.minimized = !dm.minimized;
+                renderFloatingDMStack();
+            }
+        }
+
+        function closeDM(dmId) {
+            state.openDMs = state.openDMs.filter(d => d.id !== dmId);
+            renderFloatingDMStack();
+        }
+
+        async function handleSendDM(e, dmId) {
+            e.preventDefault();
+            const input = document.getElementById(`dmInput_${dmId}`);
+            if (!input) return;
+            const text = input.value.trim();
+            if (!text) return;
+
+            const dm = state.openDMs.find(d => d.id === dmId);
+            if (!dm) return;
+
+            const sent = await sendMessageToRoom(dm.roomId, text);
+            if (sent) {
+                dm.messages.push({ sender: currentCallsign, text: text, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), isMe: true });
+                input.value = '';
+                renderFloatingDMStack();
+            }
+        }
+
+        function renderFriendsSidebar() {
+            const container = document.getElementById('friendsListSidebar');
+            if (state.friends.length === 0) {
+                container.innerHTML = '<div class="px-2.5 py-4 text-center text-xs text-zinc-400">No direct messages yet.</div>';
+                return;
+            }
+            container.innerHTML = state.friends.map(f => `
+                <button onclick="openFloatingDM('${f.id}')" class="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs hover:bg-zinc-200/60 transition-all group text-left">
+                    <div class="relative shrink-0">
+                        <div class="w-7 h-7 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-[10px] font-bold">${f.callsign.slice(0, 2).toUpperCase()}</div>
+                        <span class="absolute bottom-0 right-0 w-2 h-2 ${f.status === 'online' ? 'bg-emerald-500' : 'bg-amber-500'} rounded-full ring-2 ring-white"></span>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <div class="font-semibold text-zinc-800 truncate group-hover:text-red-600 transition-colors">${f.callsign}</div>
+                    </div>
+                    <i class="fa-solid fa-message text-zinc-300 group-hover:text-red-500 text-xs"></i>
+                </button>
+            `).join('');
+        }
+
+        function renderFriendsModalList() {
+            const container = document.getElementById('friendsModalList');
+            if (state.friends.length === 0) {
+                container.innerHTML = '<div class="py-6 text-center text-xs text-zinc-400">No direct messages yet.</div>';
+                return;
+            }
+            container.innerHTML = state.friends.map(f => `
+                <div class="flex items-center justify-between p-2.5 rounded-xl border border-zinc-100 hover:border-red-200 hover:bg-red-50/30 transition-all">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="relative shrink-0">
+                            <div class="w-9 h-9 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-xs font-bold">${f.callsign.slice(0, 2).toUpperCase()}</div>
+                            <span class="absolute bottom-0 right-0 w-2.5 h-2.5 ${f.status === 'online' ? 'bg-emerald-500' : 'bg-amber-500'} rounded-full ring-2 ring-white"></span>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="font-semibold text-xs text-zinc-900 truncate">${f.callsign}</div>
+                            <div class="text-[10px] text-zinc-500 truncate">Anonymous contact</div>
+                        </div>
+                    </div>
+                    <button onclick="openFloatingDM('${f.id}'); toggleFriendsListModal();" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg shrink-0 flex items-center gap-1 shadow-sm">
+                        <i class="fa-solid fa-comment"></i> DM
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function renderMembers() {
+            const container = document.getElementById('onlineMembersList');
+            if (state.friends.length === 0) {
+                container.innerHTML = '<div class="px-2 py-3 text-xs text-zinc-400">No contacts added.</div>';
+                return;
+            }
+            container.innerHTML = state.friends.map(m => `
+                <div class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-zinc-200/50 cursor-pointer" onclick="openFloatingDM('${m.id}')">
+                    <div class="relative shrink-0">
+                        <div class="w-6 h-6 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-[9px] font-bold">${m.callsign.slice(0, 2).toUpperCase()}</div>
+                        <span class="absolute bottom-0 right-0 w-2 h-2 ${m.status === 'online' ? 'bg-emerald-500' : 'bg-amber-500'} rounded-full ring-1 ring-white"></span>
+                    </div>
+                    <span class="text-xs text-zinc-700 font-medium truncate">${m.callsign}</span>
+                </div>
+            `).join('');
+        }
+
+        function joinVoiceChannel(name) {
+            state.inVoiceChannel = true;
+            state.voiceName = name;
+            document.getElementById('voiceChannelName').innerText = name;
+            document.getElementById('voiceTray').classList.remove('hidden');
+            document.getElementById('voiceTray').classList.add('flex');
+            showToast(`Connected to ${name}`);
+        }
+
+        function disconnectVoice() {
+            state.inVoiceChannel = false;
+            document.getElementById('voiceTray').classList.add('hidden');
+            document.getElementById('voiceTray').classList.remove('flex');
+            showToast('Disconnected from voice');
+        }
+
+        function toggleFriendsListModal() {
+            const modal = document.getElementById('friendsModal');
+            if (modal.classList.contains('hidden')) {
+                modal.classList.remove('hidden');
+                setTimeout(() => modal.classList.remove('opacity-0'), 10);
+            } else {
+                modal.classList.add('opacity-0');
+                setTimeout(() => modal.classList.add('hidden'), 200);
+            }
+        }
+
+        function openCreateChannelModal() { document.getElementById('createChannelModal').classList.remove('hidden'); }
+        function closeCreateChannelModal() { document.getElementById('createChannelModal').classList.add('hidden'); }
+
+        function handleCreateChannel(e) {
+            e.preventDefault();
+            const input = document.getElementById('newChannelInput');
+            const name = input.value.trim().toLowerCase().replace(/\s+/g, '-');
+            if (!name) return;
+
+            if (!state.channels[state.currentServer]) {
+                state.channels[state.currentServer] = [];
+            }
+
+            state.channels[state.currentServer].push({ id: name, name: name, topic: `Discussion channel for #${name}` });
+            input.value = '';
+            closeCreateChannelModal();
+            renderChannels();
+            selectChannel(name);
+            showToast(`Channel #${name} created`);
+        }
+
+        function openCreateServerModal() { showToast('Server creation wizard'); }
+        function openServerSettingsModal() { showToast('Server settings loaded'); }
+        function toggleMemberList() { document.getElementById('memberSidebar').classList.toggle('hidden'); }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMessage').innerText = msg;
+            toast.classList.remove('translate-y-[-100px]', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-[-100px]', 'opacity-0');
+            }, 2500);
+        }
+    </script>
+    <script src="chat.js"></script>
+</body>
+</html>
