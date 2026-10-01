@@ -9,6 +9,7 @@ localStorage.setItem('callsign', currentCallsign);
 
 let currentRoomId = null;
 let realtimeSubscription = null;
+let personalDMSubscription = null;
 const dmSubscriptions = {}; // Holds channel subscriptions for open DMs
 
 const roomStorageKey = 'waffle-suite-room-id';
@@ -42,13 +43,64 @@ function bindCallsignInput() {
   if (!input) return;
 
   input.value = currentCallsign;
-  input.addEventListener('change', () => {
+  input.addEventListener('change', async () => {
+    const previousCallsign = currentCallsign;
     const nextCallsign = input.value.trim().replace(/\s+/g, '_').slice(0, 24);
-    currentCallsign = nextCallsign || `Ghost_${Math.floor(Math.random() * 1000)}`;
-    input.value = currentCallsign;
-    localStorage.setItem('callsign', currentCallsign);
-    if (currentRoomId) registerCallsign(currentRoomId, currentCallsign);
+    const updatedCallsign = nextCallsign || `Ghost_${Math.floor(Math.random() * 1000)}`;
+
+    if (updatedCallsign === previousCallsign) {
+      input.value = previousCallsign;
+      return;
+    }
+
+    if (await updateCallsign(previousCallsign, updatedCallsign)) {
+      currentCallsign = updatedCallsign;
+      input.value = currentCallsign;
+      localStorage.setItem('callsign', currentCallsign);
+      subscribeToPersonalDMs();
+      showToast(`Callsign changed to ${currentCallsign}`);
+    } else {
+      input.value = previousCallsign;
+      showToast('Unable to update callsign');
+    }
   });
+}
+
+async function updateCallsign(previousCallsign, nextCallsign) {
+  const { data: existingCallsign, error: lookupError } = await supabaseClient
+    .from('room_members')
+    .select('room_id')
+    .eq('callsign', nextCallsign)
+    .limit(1)
+    .maybeSingle();
+
+  if (lookupError) {
+    console.error('Error checking callsign availability:', lookupError);
+    return false;
+  }
+
+  if (existingCallsign) {
+    console.error('Callsign is already registered:', nextCallsign);
+    return false;
+  }
+
+  const { data: updatedRows, error: updateError } = await supabaseClient
+    .from('room_members')
+    .update({ callsign: nextCallsign })
+    .eq('callsign', previousCallsign)
+    .select('room_id');
+
+  if (updateError) {
+    console.error('Error updating callsign:', updateError);
+    return false;
+  }
+
+  if (!updatedRows?.length) {
+    console.error('Callsign update affected no room_members rows. Check Supabase UPDATE RLS policy.');
+    return false;
+  }
+
+  return true;
 }
 
 async function registerCallsign(roomId, callsign) {
@@ -292,7 +344,11 @@ async function loadAndSubscribeDM(dmObject) {
 }
 
 function subscribeToPersonalDMs() {
-  supabaseClient
+  if (personalDMSubscription) {
+    supabaseClient.removeChannel(personalDMSubscription);
+  }
+
+  personalDMSubscription = supabaseClient
     .channel(`personal_dms:${currentCallsign}`)
     .on(
       'postgres_changes',
