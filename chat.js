@@ -27,7 +27,11 @@ async function initializeRealtimeChat() {
     if (roomId) localStorage.setItem(roomStorageKey, roomId);
   }
 
-  if (roomId) await switchRoom(roomId);
+  if (roomId) {
+    currentRoomId = roomId;
+    await registerCallsign(roomId, currentCallsign);
+    await switchRoom(roomId);
+  }
 
   // Listen for newly created DM rooms that include this callsign
   subscribeToPersonalDMs();
@@ -43,7 +47,36 @@ function bindCallsignInput() {
     currentCallsign = nextCallsign || `Ghost_${Math.floor(Math.random() * 1000)}`;
     input.value = currentCallsign;
     localStorage.setItem('callsign', currentCallsign);
+    if (currentRoomId) registerCallsign(currentRoomId, currentCallsign);
   });
+}
+
+async function registerCallsign(roomId, callsign) {
+  const { data: existingMember, error: lookupError } = await supabaseClient
+    .from('room_members')
+    .select('room_id')
+    .eq('room_id', roomId)
+    .eq('callsign', callsign)
+    .limit(1)
+    .maybeSingle();
+
+  if (lookupError) {
+    console.error('Error checking callsign registration:', lookupError);
+    return false;
+  }
+
+  if (existingMember) return true;
+
+  const { error: insertError } = await supabaseClient
+    .from('room_members')
+    .insert([{ room_id: roomId, callsign }]);
+
+  if (insertError) {
+    console.error('Error registering callsign:', insertError);
+    return false;
+  }
+
+  return true;
 }
 
 async function handleRealtimeSend(event) {
